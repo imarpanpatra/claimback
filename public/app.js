@@ -130,8 +130,10 @@ function showResult(c) {
   if (c.verdict === 'owed' || c.verdict === 'likely') {
     card = el('div', { class: 'result' },
       el('p', { class: 'eyebrow' }, c.verdict === 'owed' ? 'You are owed' : 'You are probably owed'),
-      el('p', { class: 'amount' }, c.amountText),
-      c.reducedText ? el('p', { class: 'reduced' }, `The airline may cut this to ${c.reducedText}, because you arrived between 3 and 4 hours late.`) : null,
+      // When the airline may halve the payment, show the range rather than
+      // implying the full amount is certain.
+      el('p', { class: 'amount' }, c.reducedText ? `${c.reducedText}–${c.amountText}` : c.amountText),
+      c.reducedText ? el('p', { class: 'reduced' }, `${c.amountText} in full. Because you arrived between 3 and 4 hours late, the airline may pay half.`) : null,
       el('p', { class: 'route' }, route),
       el('p', {}, `Under ${c.regimeName}. ${c.reasons?.[0] ?? ''}`),
       c.filing
