@@ -238,6 +238,17 @@ async function replay() {
   };
   // ?pace=2 plays the recording at half speed, which reads better on video.
   const pace = Math.min(Math.max(Number(new URLSearchParams(location.search).get('pace')) || 1, 0.25), 5);
+
+  // The demo-video recorder passes in how long each part's voiceover runs, so a
+  // step stays on screen until its narration ends. It reads the marks back to
+  // line the audio up with when each step appeared.
+  const holds = window.__narrationHolds ?? {};
+  window.__replayMarks = [];
+  let held = null;
+  const waitForNarration = async () => {
+    if (held && holds[held.key]) await sleep(Math.max(0, holds[held.key] - (performance.now() - held.since)));
+  };
+
   let previous = 0;
   for (const e of events) {
     // Keep the rhythm of the real run but squeeze the long waits.
@@ -245,8 +256,18 @@ async function replay() {
     previous = e.t;
     await sleep(gap);
     if (cancelled) return;
+    if (e.type === 'step' || e.type === 'result' || e.type === 'end') {
+      await waitForNarration();
+      if (cancelled) return;
+      if (e.type !== 'end') {
+        const key = e.type === 'result' ? 'result' : e.id;
+        held = { key, since: performance.now() };
+        window.__replayMarks.push({ key, at: Date.now() });
+      }
+    }
     render(e);
   }
+  await waitForNarration();
   setBusy(false);
 }
 $('#watch-replay').addEventListener('click', replay);

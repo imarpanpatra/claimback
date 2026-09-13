@@ -1,0 +1,18 @@
+{
+  "voice": "en-US-AndrewNeural",
+  "rate": "-5%",
+  "segments": {
+    "title": "When a flight arrives more than three hours late, the airline often owes you compensation, and most people never claim it. Claimback is an AI agent that checks what really happened, reads the law, and fills in the claim for you.",
+    "flight": "We give it a real flight: Air India 162, London Heathrow to Delhi, on the ninth of September. Anakin Wire turns the airline code into the one FlightAware uses, and Anakin's URL Scraper pulls the real gate times. It reached the gate three hours and twenty-seven minutes late.",
+    "verify": "One source is not proof. AirHelp's flight status, through Anakin Wire, independently reports two hundred and seven minutes. The two sources agree.",
+    "law": "Next, which laws apply. It looks up both airports and measures the route at six thousand seven hundred kilometres. The flight left the UK, so UK 261 applies. India's rules apply too, but they pay nothing for delays.",
+    "rules-UK261": "It reads Article 7 live, on legislation dot gov dot uk. Every sentence the model quotes is checked against that page, and the amount is checked against a built-in table, so a misread page cannot put a wrong figure into a claim.",
+    "cause": "Airlines refuse claims by blaming extraordinary circumstances, like storms or strikes. So it searches for any disruption that day, and finds none.",
+    "form": "Now it acts. Anakin Search finds Air India's own claim form. The cloud browser connects from the UK, rejects the cookie banner, and fills in the ticket number and surname. Then it stops at Submit. That rule lives in code, not in a prompt. Claimback never sends a claim for you.",
+    "letter": "It also writes the claim letter, with the flight, the regulation and the amount, ready to send.",
+    "result": "The result: two hundred and sixty to five hundred and twenty pounds owed, worked out for fourteen Anakin credits.",
+    "recap": "Everything it read, every decision, and the evidence behind each one stays on the page, so you can check its work.",
+    "clip": "This is the real recording from Anakin's cloud browser in that run. The banner is rejected, the fields are filled, and it stops right at Submit.",
+    "end": "Claimback. Built on Anakin Wire, URL Scraper, Search, and the Browser API. Watch the recorded run, or start a live claim with the access code."
+  }
+}
