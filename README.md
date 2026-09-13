@@ -6,6 +6,8 @@ Millions of passengers are owed delay compensation every year and never claim it
 
 Built for **Anakin Forge 2026** on [Anakin](https://anakin.io), with OpenAI and Gemini for reasoning.
 
+**Try it:** [watch a recorded run](https://claimback-kt20.onrender.com) (always on), or [start a live claim](https://claimback-live.onrender.com) (needs the access code, and takes about a minute to wake).
+
 ## A real run
 
 **Air India AI162, London Heathrow to Delhi, 9 September 2026.**
