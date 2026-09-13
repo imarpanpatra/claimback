@@ -1,8 +1,16 @@
-# Render Blueprint for the live version: New > Blueprint, pick this repository,
-# then fill in the secrets when Render asks for them.
+# Render Blueprint: New > Blueprint, pick this repository, and fill in the
+# secrets when asked. It creates two free services from the same repo:
+#   claimback       an always-on static site that plays the recorded run
+#   claimback-live  the Node server that runs live claims (sleeps when idle)
 services:
   - type: web
     name: claimback
+    runtime: static
+    buildCommand: echo "No build step. public/ is served as is."
+    staticPublishPath: public
+
+  - type: web
+    name: claimback-live
     runtime: node
     plan: free
     buildCommand: npm ci
@@ -11,11 +19,11 @@ services:
     envVars:
       - key: NODE_VERSION
         value: "22"
-      - key: OPENAI_API_KEY
+      - key: ANAKIN_API_KEY
         sync: false
       - key: GEMINI_API_KEY
         sync: false
-      - key: ANAKIN_API_KEY
+      - key: OPENAI_API_KEY
         sync: false
       - key: LIVE_RUN_CODE
         sync: false

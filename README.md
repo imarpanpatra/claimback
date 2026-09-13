@@ -11,8 +11,8 @@ Built for **Anakin Forge 2026** on [Anakin](https://anakin.io), with OpenAI and 
 **Air India AI162, London Heathrow to Delhi, 9 September 2026.**
 
 - **Read.** FlightAware's gate times say it was due at 00:20 and reached the gate at 03:47, 207 minutes late. AirHelp's flight-status listing independently reports 207 minutes.
-- **Reason.** It departed the UK, so UK Regulation 261/2004 applies. India's DGCA rules also apply to an Indian airline, but pay nothing for delays. The route is 6,732 km. Claimback reads Article 7 on legislation.gov.uk and decides the passenger is owed **£520**, which Air India may halve to £260 because the delay was between 3 and 4 hours.
-- **Act.** It finds Air India's own EU/UK delay claim form with Anakin Search, opens it in Anakin's cloud browser through a UK connection, clears the cookie banner, fills in the ticket number and surname, and stops at Submit. Then it writes the claim letter.
+- **Reason.** It departed the UK, so UK Regulation 261/2004 applies. India's DGCA rules also apply to an Indian airline, but pay nothing for delays. The route is 6,732 km. Claimback reads Article 7 on legislation.gov.uk and decides the passenger is owed £520, which Air India may halve to £260 because the delay was between 3 and 4 hours.
+- **Act.** It finds Air India's own EU/UK delay claim form with Anakin Search, opens it in Anakin's cloud browser through a UK connection, rejects the cookie banner, fills in the ticket number and surname, and stops at Submit. Then it writes the claim letter.
 
 The whole run takes a few minutes and about 14 Anakin credits.
 
@@ -41,7 +41,7 @@ flowchart LR
 | Reason | The official regulation text, read live | URL Scraper (legislation.gov.uk, europa.eu) |
 | Reason | Reports of weather, strikes or ATC problems the airline could cite | Search |
 | Act | The airline's own claim form | Search |
-| Act | Filling it in, recorded, stopping at Submit | Browser API |
+| Act | Filling it in through a connection in the departure country, recorded, stopping at Submit | Browser API |
 
 Every decision is a structured JSON answer from the model: OpenAI when `OPENAI_API_KEY` is set, with Gemini as the fallback.
 
@@ -77,17 +77,12 @@ Every visitor sees a recorded run. Live runs spend credits, so they need the `LI
 
 ## Deploy
 
-**Live version on Render.** `render.yaml` is a Render Blueprint: choose New > Blueprint, pick this repository, and fill in `ANAKIN_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY` and `LIVE_RUN_CODE`. The free plan sleeps when idle, so the first visit takes about a minute.
+`render.yaml` is a Render Blueprint. In Render, choose New > Blueprint, pick this repository, and fill in the secrets. It creates two free services:
 
-**Recorded run on a static host.** The page replays `public/demo/featured-run.json` without a server, so it works on any static host, such as a Hugging Face Static Space:
+- **claimback**, a static site that plays the recorded run in `public/demo/featured-run.json`. It is always on and spends no credits.
+- **claimback-live**, the Node server for live claims. It needs `ANAKIN_API_KEY`, `OPENAI_API_KEY` or `GEMINI_API_KEY`, and `LIVE_RUN_CODE`. Free web services sleep when idle, so the first visit takes about a minute.
 
-```bash
-node scripts/feature-run.js runs/<a complete run>.json   # choose the run to show
-LIVE_URL=https://<your render app> node scripts/build-static.js
-# push dist/hf-space to the Space
-```
-
-A `Dockerfile` is included for hosts that run containers.
+Put the live service's address in `public/site.json` so the static page links to it. To replay a different run, use `node scripts/feature-run.js runs/<a complete run>.json`. A `Dockerfile` is included for hosts that run containers.
 
 ## Project layout
 
@@ -100,7 +95,7 @@ A `Dockerfile` is included for hosts that run containers.
 | `lib/llm.js`, `lib/openai.js`, `lib/gemini.js` | Structured model calls with fallback |
 | `lib/anakin.js` | The Anakin API client |
 | `server.js`, `public/` | The web app, with live runs streamed over server-sent events |
-| `scripts/` | Terminal runner, replay promotion, static build, demo video |
+| `scripts/` | Terminal runner, replay promotion, demo video |
 
 ## Limits
 
