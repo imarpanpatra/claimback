@@ -12,7 +12,7 @@ Built for **Anakin Forge 2026** on [Anakin](https://anakin.io), with OpenAI and 
 
 - **Read.** FlightAware's gate times say it was due at 00:20 and reached the gate at 03:47, 207 minutes late. AirHelp's flight-status listing independently reports 207 minutes.
 - **Reason.** It departed the UK, so UK Regulation 261/2004 applies. India's DGCA rules also apply to an Indian airline, but pay nothing for delays. The route is 6,732 km. Claimback reads Article 7 on legislation.gov.uk and decides the passenger is owed **£520**, which Air India may halve to £260 because the delay was between 3 and 4 hours.
-- **Act.** It finds Air India's own EU/UK delay claim form with Anakin Search, opens it in Anakin's cloud browser, rejects the cookie banner, fills in the ticket number and surname, and stops at Submit. Then it writes the claim letter.
+- **Act.** It finds Air India's own EU/UK delay claim form with Anakin Search, opens it in Anakin's cloud browser through a UK connection, clears the cookie banner, fills in the ticket number and surname, and stops at Submit. Then it writes the claim letter.
 
 The whole run takes a few minutes and about 14 Anakin credits.
 
