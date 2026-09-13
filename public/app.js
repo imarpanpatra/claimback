@@ -37,6 +37,14 @@ function append(stepId, node) {
   const target = steps.get(stepId) ?? lastStep;
   if (target) target.querySelector('.body').append(node);
   else timeline.append(el('li', { class: 'step failed' }, el('div', { class: 'body' }, node)));
+
+  // Keep new output in view as it arrives. Screenshots have no height until
+  // they decode, so scroll again once they have.
+  if (target && target !== lastStep) return;
+  const keepInView = () => node.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  keepInView();
+  const img = node.querySelector?.('img');
+  if (img && !img.complete) img.addEventListener('load', keepInView, { once: true });
 }
 
 function finishStep() {
