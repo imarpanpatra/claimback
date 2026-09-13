@@ -1,0 +1,20 @@
+{
+  "name": "claimback",
+  "version": "1.0.0",
+  "description": "An AI agent that works out whether a delayed flight owes you compensation, then fills in the airline's claim form.",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "claim": "node scripts/claim.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "playwright-core": "^1.63.0"
+  }
+}

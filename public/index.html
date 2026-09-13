@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Claimback: your late flight owes you money</title>
+  <meta name="description" content="An AI agent that reads live flight data and the law, works out what an airline owes you, and fills in the claim form." />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✈️</text></svg>" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="top">
+    <div class="brand"><span class="logo" aria-hidden="true">↩</span> Claimback</div>
+    <nav><a href="https://github.com/imarpanpatra/claimback" target="_blank" rel="noopener">GitHub</a></nav>
+  </header>
+
+  <main>
+    <section class="hero">
+      <h1>Your flight was late.<br /><em>The airline owes you.</em></h1>
+      <p>Claimback checks what really happened to your flight, reads the law that covers it, works out what you're owed, and fills in the airline's claim form. It stops before sending anything, so the final click is yours.</p>
+    </section>
+
+    <section class="grid">
+      <aside class="panel">
+        <form id="claim-form">
+          <label>Flight number <input name="flightNumber" value="AI162" required maxlength="8" autocomplete="off" /></label>
+          <label>Departure date <input name="date" type="date" value="2026-09-09" required /></label>
+          <label>Your name <input name="fullName" placeholder="Alex Demo" maxlength="80" autocomplete="name" /></label>
+          <label>Email <input name="email" type="email" placeholder="alex.demo@example.com" maxlength="120" autocomplete="email" /></label>
+          <label>E-ticket number <input name="ticketNumber" placeholder="Optional" maxlength="20" inputmode="numeric" autocomplete="off" /></label>
+          <label>Booking reference <input name="bookingReference" placeholder="Optional" maxlength="12" autocomplete="off" /></label>
+          <label>Access code <input name="code" type="password" placeholder="Needed for live runs" autocomplete="off" /></label>
+          <button type="submit" id="run-live">Run live</button>
+          <button type="button" id="watch-replay" class="secondary">Watch a recorded run</button>
+          <p class="hint" id="hint">Live runs spend real Anakin credits, so they need an access code. The recording is a real run, replayed.</p>
+        </form>
+        <div class="meter"><strong id="credits">0</strong> Anakin credits used<span id="model"></span></div>
+      </aside>
+
+      <section class="stage" aria-live="polite">
+        <div id="empty" class="empty">
+          <p><strong>Try AI162 on 9 September 2026.</strong> A real Air India flight from London Heathrow to Delhi that reached its gate 3 hours 27 minutes late.</p>
+          <p>Press <em>Watch a recorded run</em> to see the agent handle it from start to finish.</p>
+        </div>
+        <div id="result"></div>
+        <ol id="timeline" class="timeline"></ol>
+      </section>
+    </section>
+
+    <section class="how">
+      <div>
+        <span class="chip read">Read</span>
+        <h2>Live facts, two sources</h2>
+        <p>Gate times from FlightAware through Anakin's URL Scraper, cross-checked with AirHelp flight status through Anakin Wire. Then the official EU or UK regulation text, read live.</p>
+      </div>
+      <div>
+        <span class="chip reason">Reason</span>
+        <h2>Decisions you can check</h2>
+        <p>The model works out which laws apply and what's owed, quoting the regulation. Every quote is checked against the page it came from, and every amount against a built-in table.</p>
+      </div>
+      <div>
+        <span class="chip act">Act</span>
+        <h2>The claim, filled in</h2>
+        <p>It finds the airline's claim form with Anakin Search and fills it in Anakin's recorded cloud browser, stopping at the submit button. It also writes a claim letter you can send.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site">Built for Anakin Forge 2026. Not legal advice.</footer>
+  <dialog id="zoom"><img alt="Enlarged screenshot" /></dialog>
+  <script src="app.js" type="module"></script>
+</body>
+</html>

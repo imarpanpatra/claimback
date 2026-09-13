@@ -1,0 +1,21 @@
+# Render Blueprint for the live version: New > Blueprint, pick this repository,
+# then fill in the secrets when Render asks for them.
+services:
+  - type: web
+    name: claimback
+    runtime: node
+    plan: free
+    buildCommand: npm ci
+    startCommand: node server.js
+    healthCheckPath: /api/config
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: ANAKIN_API_KEY
+        sync: false
+      - key: LIVE_RUN_CODE
+        sync: false
