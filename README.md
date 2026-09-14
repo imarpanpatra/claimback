@@ -54,10 +54,10 @@ An agent that files legal claims has to be right, so the model is never the last
 - **Two sources for the delay.** FlightAware and AirHelp are compared, and any disagreement is shown rather than hidden. Delay is measured at the gate, which is what the law uses.
 - **The airline that flew it.** A codeshare flight number is traced to the airline that operated the flight, because the law and the claim follow that airline.
 - **Quotes are checked.** Every sentence the model cites from a regulation must appear in full on the page it was read from, and is marked if it can't be found.
-- **Amounts are checked.** Each decision is compared with a built-in table of EU261, UK261, Canadian and Indian rules. The table sets the final figures, and any disagreement is shown.
-- **Sources are real.** A search result the model cites is dropped unless Anakin Search actually returned it.
-- **It never submits.** Before the airline's page loads, Claimback switches off form submission inside it, so no click, Enter key or script can send the form. It also refuses to click any control that would submit, send, confirm or pay. Both rules are code, not prompt instructions.
-- **Failures are loud.** Missing flight data, diversions and flights older than 14 days produce a clear message, never a quiet "nothing owed".
+- **Amounts are checked.** Each decision is compared with a built-in table of EU261, UK261, Canadian and Indian rules. The table sets the final figures, and any disagreement is shown. If the regulation page or the model is unavailable, the table still decides.
+- **Sources are real.** A search result the model cites is dropped unless Anakin Search actually returned it, and only web addresses are ever opened or linked.
+- **It never submits.** Before the airline's page loads, Claimback switches off form submission inside it, so no click, Enter key or script can send the form. It also blocks any script request carrying the passenger's ticket number, booking reference or email, and refuses to click any control that would submit, send, confirm or pay. These rules are code, not prompt instructions.
+- **Failures are loud.** Missing flight times, airports without coordinates, diversions and flights older than 14 days produce a clear message, never a quiet "nothing owed".
 
 ## Run it locally
 
@@ -76,7 +76,7 @@ npm run claim -- AI162 2026-09-09             # the full run, saved to runs/
 npm run claim -- AI162 2026-09-09 --no-form   # skip the browser step
 ```
 
-Every visitor sees a recorded run. Live runs spend credits, so they need the `LIVE_RUN_CODE` from `.env`.
+Every visitor sees a recorded run. Live runs spend credits, so they need the `LIVE_RUN_CODE` from `.env`. Wrong codes are limited per visitor, and a run that goes past 15 minutes is stopped so it can't hold the live-run slot.
 
 ## Tests
 
@@ -84,7 +84,7 @@ Every visitor sees a recorded run. Live runs spend credits, so they need the `LI
 npm test
 ```
 
-The tests need no keys and spend no credits: Anakin, FlightAware and the models are all mocked. They cover the compensation table, the guardrail, codeshares, model fallback, recording lookup, the server's input checks and event stream, and the page itself. The form-filler tests drive a local Chrome through airline-style pages built to trick it into sending, and check that nothing is sent. Browser tests are skipped if Chrome isn't found; set `CHROME_PATH` to point at it.
+The tests need no keys and spend no credits: Anakin, FlightAware and the models are all mocked. They cover the compensation table, the guardrail, codeshares, bad flight data, model fallback, recording lookup, the server's input checks, limits and event stream, and the page itself. The form-filler tests drive a local Chrome through airline-style pages built to trick it into sending, including scripts that post the ticket number behind a "Continue" button, and check that nothing is sent. Browser tests are skipped if Chrome isn't found; set `CHROME_PATH` to point at it.
 
 ## Deploy
 
@@ -115,7 +115,7 @@ Put the live service's address in `public/site.json` so the static page links to
 - Diversions and multi-leg journeys aren't handled.
 - Cancellation claims depend on how much notice was given, which flight data can't show, so they come back as "depends". India's cancellation amounts depend on block time, which is estimated from distance.
 - Airline forms vary. When one needs a login, a captcha or a booking lookup, Claimback stops and says so, and the claim letter is the fallback.
-- The submit guard stops real form submissions and any button labelled submit, send, confirm or pay. A site whose own script sends the claim from a button with another label, such as Continue, could get past it. Every run is recorded, so that would show.
+- The submit guard can't see inside binary request bodies or page navigations, so a site that sends the passenger's details that way could still get them through. Every run is recorded, so that would show.
 - Claimback is not legal advice.
 
 ## License

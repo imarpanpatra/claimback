@@ -9,6 +9,7 @@ let lastStep = null;
 let source = null;
 let following = 0; // bumped on every reset, so a stale reconnect does nothing
 let cancelReplay = () => {};
+let configuredModel = ''; // the server's model label, shown again whenever a new run starts
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const hostOf = (url) => {
@@ -18,6 +19,8 @@ const hostOf = (url) => {
     return url;
   }
 };
+// Links come from search results and scraped pages, so only web addresses become links.
+const webUrl = (url) => (/^https?:\/\//i.test(String(url ?? '')) ? url : null);
 const localIsoDate = (date) => new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 10);
 
 // FlightAware's public history covers about 14 days, so only offer those dates.
@@ -87,7 +90,7 @@ function render(e) {
       append(e.step, el('blockquote', { class: 'source' },
         el('p', {}, `“${e.quote}”`),
         el('footer', {},
-          el('a', { href: e.url, target: '_blank', rel: 'noopener' }, e.title || hostOf(e.url)),
+          el('a', { href: webUrl(e.url), target: '_blank', rel: 'noopener' }, e.title || hostOf(e.url)),
           e.verified === true ? el('span', { class: 'verified' }, '✓ Quote found on the page') : null,
           e.verified === false ? el('span', { class: 'unverified' }, 'Quote not found on the page') : null)));
       break;
@@ -100,7 +103,7 @@ function render(e) {
         e.caption ? el('figcaption', {}, e.caption) : null));
       break;
     case 'recording':
-      append(e.step, el('p', { class: 'note' }, el('a', { href: e.url, target: '_blank', rel: 'noopener' }, 'Watch the cloud-browser recording')));
+      if (webUrl(e.url)) append(e.step, el('p', { class: 'note' }, el('a', { href: e.url, target: '_blank', rel: 'noopener' }, 'Watch the cloud-browser recording')));
       break;
     case 'letter':
       append(e.step, letterCard(e));
@@ -130,8 +133,12 @@ function letterCard(e) {
     class: 'secondary small',
     type: 'button',
     onclick: async () => {
-      await navigator.clipboard.writeText(`${e.subject}\n\n${e.body}`).catch(() => {});
-      copy.textContent = 'Copied';
+      try {
+        await navigator.clipboard.writeText(`${e.subject}\n\n${e.body}`);
+        copy.textContent = 'Copied';
+      } catch {
+        copy.textContent = 'Couldn’t copy. Select the letter and copy it instead.';
+      }
     },
   }, 'Copy letter');
   return el('details', { class: 'letter', open: true }, el('summary', {}, e.subject), el('pre', {}, e.body), copy);
@@ -152,7 +159,7 @@ function showResult(c) {
       el('p', { class: 'route' }, route),
       el('p', {}, `Under ${c.regimeName}. ${c.reasons?.[0] ?? ''}`),
       c.filing
-        ? el('p', {}, 'Claim form on ', el('a', { href: c.filing.url, target: '_blank', rel: 'noopener' }, hostOf(c.filing.url)), `: ${c.filing.reason}`)
+        ? el('p', {}, 'Claim form on ', el('a', { href: webUrl(c.filing.url), target: '_blank', rel: 'noopener' }, hostOf(c.filing.url)), `: ${c.filing.reason}`)
         : null);
   } else {
     card = el('div', { class: 'result none' },
@@ -180,6 +187,7 @@ function reset() {
   timeline.replaceChildren();
   resultBox.replaceChildren();
   creditsEl.textContent = '0';
+  $('#model').textContent = configuredModel;
   $('#empty').hidden = true;
 }
 
@@ -257,54 +265,59 @@ $('#claim-form').addEventListener('submit', async (ev) => {
 async function replay() {
   reset();
   setBusy(true);
-  const res = await fetch('demo/featured-run.json').catch(() => null);
-  if (!res?.ok) {
-    setBusy(false);
-    showError('There is no recorded run on this deployment yet.');
-    return;
-  }
-  const { input, events } = await res.json();
-  const form = $('#claim-form');
-  form.flightNumber.value = input.flightNumber;
-  form.date.value = input.date;
-
   let cancelled = false;
   cancelReplay = () => {
     cancelled = true;
   };
-  // ?pace=2 plays the recording at half speed, which reads better on video.
-  const pace = Math.min(Math.max(Number(new URLSearchParams(location.search).get('pace')) || 1, 0.25), 5);
-
-  // The demo-video recorder passes in how long each part's voiceover runs, so a
-  // step stays on screen until its narration ends. It reads the marks back to
-  // line the audio up with when each step appeared.
-  const holds = window.__narrationHolds ?? {};
-  window.__replayMarks = [];
-  let held = null;
-  const waitForNarration = async () => {
-    if (held && holds[held.key]) await sleep(Math.max(0, holds[held.key] - (performance.now() - held.since)));
-  };
-
-  let previous = 0;
-  for (const e of events) {
-    // Keep the rhythm of the real run but squeeze the long waits.
-    const gap = Math.min(Math.max(e.t - previous, 250), e.type === 'step' ? 1400 : 900) * pace;
-    previous = e.t;
-    await sleep(gap);
-    if (cancelled) return;
-    if (e.type === 'step' || e.type === 'result' || e.type === 'end') {
-      await waitForNarration();
-      if (cancelled) return;
-      if (e.type !== 'end') {
-        const key = e.type === 'result' ? 'result' : e.id;
-        held = { key, since: performance.now() };
-        window.__replayMarks.push({ key, at: Date.now() });
-      }
+  try {
+    const res = await fetch('demo/featured-run.json').catch(() => null);
+    if (!res?.ok) {
+      showError('There is no recorded run on this deployment yet.');
+      return;
     }
-    render(e);
+    const { input, events } = await res.json();
+    const form = $('#claim-form');
+    form.flightNumber.value = input.flightNumber;
+    form.date.value = input.date;
+
+    // ?pace=2 plays the recording at half speed, which reads better on video.
+    const pace = Math.min(Math.max(Number(new URLSearchParams(location.search).get('pace')) || 1, 0.25), 5);
+
+    // The demo-video recorder passes in how long each part's voiceover runs, so a
+    // step stays on screen until its narration ends. It reads the marks back to
+    // line the audio up with when each step appeared.
+    const holds = window.__narrationHolds ?? {};
+    window.__replayMarks = [];
+    let held = null;
+    const waitForNarration = async () => {
+      if (held && holds[held.key]) await sleep(Math.max(0, holds[held.key] - (performance.now() - held.since)));
+    };
+
+    let previous = 0;
+    for (const e of events) {
+      // Keep the rhythm of the real run but squeeze the long waits.
+      const gap = Math.min(Math.max(e.t - previous, 250), e.type === 'step' ? 1400 : 900) * pace;
+      previous = e.t;
+      await sleep(gap);
+      if (cancelled) return;
+      if (e.type === 'step' || e.type === 'result' || e.type === 'end') {
+        await waitForNarration();
+        if (cancelled) return;
+        if (e.type !== 'end') {
+          const key = e.type === 'result' ? 'result' : e.id;
+          held = { key, since: performance.now() };
+          window.__replayMarks.push({ key, at: Date.now() });
+        }
+      }
+      render(e);
+    }
+    await waitForNarration();
+  } catch {
+    if (!cancelled) showError('The recorded run couldn’t be played. Try reloading the page.');
+  } finally {
+    // A replay cut short by a live run leaves the buttons to that run.
+    if (!cancelled) setBusy(false);
   }
-  await waitForNarration();
-  setBusy(false);
 }
 $('#watch-replay').addEventListener('click', replay);
 
@@ -320,7 +333,8 @@ fetch('api/config')
     return r.json();
   })
   .then((config) => {
-    $('#model').textContent = ` · reasoning by ${config.model}`;
+    configuredModel = ` · reasoning by ${config.model}`;
+    $('#model').textContent = configuredModel;
     if (!config.liveRuns) disableLiveRuns(['Live runs are switched off on this deployment. The recording is a real run, replayed.']);
   })
   .catch(async () => {

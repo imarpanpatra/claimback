@@ -53,6 +53,15 @@ test('a model that rejects a setting is skipped for the next one', async () => {
   assert.deepEqual(calls, ['gemini-3.8-flash', 'gemini-3.7-flash']);
 });
 
+test('blocked answers from every model give up quickly instead of retrying each one', async () => {
+  calls = [];
+  respond = () => json({ promptFeedback: { blockReason: 'SAFETY' } });
+  const started = Date.now();
+  await assert.rejects(ask, /no answer/);
+  assert.equal(calls.length, 5);
+  assert.ok(Date.now() - started < 2000, `took ${Date.now() - started} ms`);
+});
+
 test('an answer that is not valid JSON moves on to the next model', async () => {
   calls = [];
   respond = (model) => (model === 'gemini-3.8-flash'

@@ -10,26 +10,52 @@ dotenv.config({ quiet: true });
 
 const PORT = Number(process.env.PORT) || 7860;
 const DAY = 86_400_000;
+// A claim normally takes 2 to 5 minutes. One that runs far longer is stuck, and
+// mustn't hold the only live-run slot forever.
+const RUN_TIMEOUT_MS = Number(process.env.RUN_TIMEOUT_MS) || 15 * 60_000;
+// Wrong access codes allowed from one address before it has to wait.
+const CODE_ATTEMPTS = 20;
+const CODE_WINDOW_MS = 15 * 60_000;
 // Used for any field a visitor leaves blank. The agent stops before submitting,
 // so demo details never reach an airline.
 const DEMO_PASSENGER = { fullName: 'Alex Demo', email: 'alex.demo@example.com', ticketNumber: '0982100000000' };
 
 const app = express();
+// Render sits behind proxies, so the visitor's own address is the first one in
+// X-Forwarded-For. It can be faked, but it only feeds the wrong-code limit, and
+// keying on a shared proxy address would lock every visitor out together.
+app.set('trust proxy', true);
 app.use(express.json({ limit: '32kb' }));
 // The recorded run lives in public/demo, so the page also works on a static host.
 app.use(express.static(fileURLToPath(new URL('./public', import.meta.url))));
 
 const runs = new Map();
+const wrongCodes = new Map();
 let running = 0;
 
 const text = (value, max) => (typeof value === 'string' ? value.trim().slice(0, max) : '');
 
 function codeMatches(given) {
-  const expected = process.env.LIVE_RUN_CODE;
+  const expected = process.env.LIVE_RUN_CODE?.trim();
   if (!expected || typeof given !== 'string') return false;
-  const a = Buffer.from(given);
+  const a = Buffer.from(given.trim());
   const b = Buffer.from(expected);
   return a.length === b.length && timingSafeEqual(a, b);
+}
+
+function tooManyWrongCodes(ip) {
+  const entry = wrongCodes.get(ip);
+  return Boolean(entry && Date.now() - entry.since < CODE_WINDOW_MS && entry.count >= CODE_ATTEMPTS);
+}
+
+function recordWrongCode(ip) {
+  const now = Date.now();
+  const entry = wrongCodes.get(ip);
+  if (entry && now - entry.since < CODE_WINDOW_MS) entry.count += 1;
+  else wrongCodes.set(ip, { count: 1, since: now });
+  if (wrongCodes.size > 1000) {
+    for (const [key, value] of wrongCodes) if (now - value.since >= CODE_WINDOW_MS) wrongCodes.delete(key);
+  }
 }
 
 // FlightAware's public history goes back about 14 days, so a date outside it
@@ -44,6 +70,8 @@ function dateProblem(date) {
   return null;
 }
 
+const duration = (ms) => (ms >= 60_000 ? `${Math.round(ms / 60_000)}-minute` : `${Math.round(ms / 1000)}-second`);
+
 app.get('/api/config', (req, res) => {
   const hasModel = Boolean(process.env.OPENAI_API_KEY || process.env.GEMINI_API_KEY);
   res.json({ liveRuns: Boolean(process.env.LIVE_RUN_CODE && hasModel), model: llmLabel() });
@@ -53,7 +81,11 @@ app.post('/api/runs', (req, res) => {
   const body = req.body && typeof req.body === 'object' ? req.body : {};
   const { code, flightNumber, date } = body;
   const passenger = body.passenger && typeof body.passenger === 'object' ? body.passenger : {};
-  if (!codeMatches(code)) return res.status(403).json({ error: 'That access code isn’t right.' });
+  if (tooManyWrongCodes(req.ip)) return res.status(429).json({ error: 'Too many wrong access codes. Try again in 15 minutes.' });
+  if (!codeMatches(code)) {
+    recordWrongCode(req.ip);
+    return res.status(403).json({ error: 'That access code isn’t right.' });
+  }
   if (!text(flightNumber, 10)) return res.status(400).json({ error: 'Enter a flight number.' });
   const problem = dateProblem(date);
   if (problem) return res.status(400).json({ error: problem });
@@ -71,21 +103,32 @@ app.post('/api/runs', (req, res) => {
   running++;
 
   // Events are numbered so a page whose stream drops can resume where it left off.
+  // Once a run is closed, anything it still emits is dropped.
   const emit = (event) => {
+    if (run.done) return;
     const e = { ...event, t: Date.now() - run.startedAt, seq: run.events.length };
     run.events.push(e);
     for (const send of run.listeners) send(e);
   };
+  const finish = async () => {
+    if (run.done) return;
+    emit({ type: 'end' });
+    run.done = true;
+    running--;
+    await mkdir('runs', { recursive: true }).catch(() => {});
+    await writeFile(`runs/${id}.json`, JSON.stringify({ input: run.input, events: run.events })).catch(() => {});
+    setTimeout(() => runs.delete(id), 30 * 60_000).unref();
+  };
+  const limit = setTimeout(() => {
+    emit({ type: 'error', message: `The claim went over the ${duration(RUN_TIMEOUT_MS)} limit, so Claimback gave up on it. Try again in a few minutes.` });
+    finish();
+  }, RUN_TIMEOUT_MS);
 
   runClaim({ flightNumber: text(flightNumber, 10), date, passenger: who }, emit)
     .catch((err) => emit({ type: 'error', message: err.message }))
-    .finally(async () => {
-      running--;
-      run.done = true;
-      emit({ type: 'end' });
-      await mkdir('runs', { recursive: true }).catch(() => {});
-      await writeFile(`runs/${id}.json`, JSON.stringify({ input: run.input, events: run.events })).catch(() => {});
-      setTimeout(() => runs.delete(id), 30 * 60_000).unref();
+    .finally(() => {
+      clearTimeout(limit);
+      finish();
     });
 
   res.status(202).json({ id });

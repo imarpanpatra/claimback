@@ -32,14 +32,14 @@ const ARTICLE_7 = [
 ].join('\n');
 
 // FlightAware keeps a flight's recent history as JSON inside the page.
-function flightAwarePage({ airline, origin, destination, delayMin = 0, cancelled = false }) {
+function flightAwarePage({ airline, origin, destination, delayMin = 0, cancelled = false, noScheduledArrival = false }) {
   const dep = Date.UTC(2026, 8, 9, 8, 45) / 1000;
   const arr = dep + 8 * 3600 + 35 * 60;
   const flight = {
     origin: { iata: origin, friendlyName: AIRPORTS[origin].name, TZ: TIME_ZONES[origin] },
     destination: { iata: destination, friendlyName: AIRPORTS[destination].name, TZ: TIME_ZONES[destination] },
     gateDepartureTimes: { scheduled: dep, actual: cancelled ? null : dep + delayMin * 60 },
-    gateArrivalTimes: { scheduled: arr, actual: cancelled ? null : arr + delayMin * 60 },
+    gateArrivalTimes: { scheduled: noScheduledArrival ? null : arr, actual: cancelled ? null : arr + delayMin * 60 },
     cancelled,
     diverted: false,
   };
@@ -57,18 +57,25 @@ globalThis.fetch = async (url, options = {}) => {
   const body = options.body ? JSON.parse(options.body) : {};
   if (url.endsWith('/v1/wire-run')) {
     const p = body.params;
+    const airports = scenario.airports ?? AIRPORTS;
     if (body.action_id === 'act_airhelp_airline_autocomplete') return json({ status: 'completed', data: { items: [AIRLINES[p.airline_query]].filter(Boolean) }, credits_used: 1 });
-    if (body.action_id === 'act_airhelp_airport_autocomplete') return json({ status: 'completed', data: { items: [AIRPORTS[p.airport_query]].filter(Boolean) }, credits_used: 1 });
+    if (body.action_id === 'act_airhelp_airport_autocomplete') return json({ status: 'completed', data: { items: [airports[p.airport_query]].filter(Boolean) }, credits_used: 1 });
     if (body.action_id === 'act_airhelp_flight_status_listing') return json({ status: 'completed', data: { items: [] }, credits_used: 2 });
   }
   if (url.endsWith('/v1/url-scraper/scrape')) {
     if (body.url.includes('flightaware.com')) return json({ id: 'fa', status: 'completed', html: scenario.flightAware, markdown: '' });
-    if (body.url.includes('legislation.gov.uk')) return json({ id: 'law', status: 'completed', html: '', markdown: ARTICLE_7 });
+    if (body.url.includes('legislation.gov.uk')) {
+      if (scenario.lawFails) return json({ error: 'upstream timeout' }, 500);
+      return json({ id: 'law', status: 'completed', html: '', markdown: ARTICLE_7 });
+    }
   }
   if (url.includes('generativelanguage.googleapis.com')) {
     const system = body.systemInstruction.parts[0].text;
     if (system.startsWith('You are a passenger-rights analyst')) return geminiReply(scenario.ruling);
-    if (system.startsWith('Write a firm, polite compensation claim')) return geminiReply({ subject: 'Claim', body: 'Letter' });
+    if (system.startsWith('Write a firm, polite compensation claim')) {
+      if (scenario.letterFails) return json({ error: { message: 'The caller does not have permission' } }, 403);
+      return geminiReply({ subject: 'Claim', body: 'Letter' });
+    }
   }
   throw new Error(`unexpected request in test: ${url}`);
 };
@@ -136,4 +143,26 @@ test('a reading more certain than the table is not called "more cautious"', asyn
   const note = guardrailNote(events);
   assert.equal(note.guardrail, 'pass');
   assert.doesNotMatch(note.text, /more cautious/);
+});
+
+test('a flight with no scheduled arrival time fails loudly instead of coming out as "nothing owed"', async () => {
+  await assert.rejects(run('AI162', ai162(RULING, { noScheduledArrival: true })), /scheduled arrival/);
+});
+
+test('an airport without coordinates fails loudly instead of landing in the long-haul band', async () => {
+  const { latitude, longitude, ...withoutCoordinates } = AIRPORTS.DEL;
+  await assert.rejects(run('AI162', { ...ai162(), airports: { ...AIRPORTS, DEL: withoutCoordinates } }), /coordinates/);
+});
+
+test('if the official text can’t be read, the built-in table still decides', async () => {
+  const { claim, events } = await run('AI162', { ...ai162(), lawFails: true });
+  assert.equal(claim.regime, 'UK261');
+  assert.equal(claim.amount, 520);
+  assert.ok(events.some((e) => e.type === 'note' && /official text/.test(e.text) && /built-in/.test(e.text)));
+});
+
+test('if the letter can’t be written, the result still arrives', async () => {
+  const { claim } = await run('AI162', { ...ai162(), letterFails: true });
+  assert.equal(claim.amount, 520);
+  assert.equal(claim.letter, null);
 });

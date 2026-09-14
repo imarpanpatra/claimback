@@ -46,6 +46,35 @@ test('malformed JSON gets a short error without a stack trace', async (t) => {
   assert.equal(/\n\s+at |node_modules/.test(res.body), false, res.body);
 });
 
+async function postFrom(url, ip, body) {
+  const res = await fetch(`${url}/api/runs`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Forwarded-For': ip }, body: JSON.stringify(body) });
+  return { status: res.status, body: await res.text() };
+}
+
+test('a run that goes over the time limit is closed and frees the slot', async (t) => {
+  const server = await startServer({ STUB_MS: '5000', STUB_TICKS: '5', RUN_TIMEOUT_MS: '800' });
+  t.after(server.stop);
+  const { id } = JSON.parse((await post(server.url, valid)).body);
+  await sleep(1500);
+  const events = await readEvents(server.url, id, 0);
+  assert.ok(events.some((e) => e.type === 'error' && /limit/.test(e.message)), JSON.stringify(events));
+  assert.equal(events.at(-1).type, 'end');
+  const next = await post(server.url, valid);
+  assert.equal(next.status, 202, next.body);
+});
+
+test('wrong access codes are limited per visitor, and a pasted code with spaces still works', async (t) => {
+  const server = await startServer({ STUB_MS: '200' });
+  t.after(server.stop);
+  for (let i = 0; i < 20; i++) {
+    assert.equal((await postFrom(server.url, '203.0.113.7', { ...valid, code: `guess-${i}` })).status, 403);
+  }
+  const locked = await postFrom(server.url, '203.0.113.7', valid);
+  assert.equal(locked.status, 429, locked.body);
+  const other = await postFrom(server.url, '203.0.113.8', { ...valid, code: '  secret\n' });
+  assert.equal(other.status, 202, other.body);
+});
+
 test('events are numbered so a dropped stream can resume where it left off', async (t) => {
   const server = await startServer({ STUB_MS: '500' });
   t.after(server.stop);

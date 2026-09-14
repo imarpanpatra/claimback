@@ -43,7 +43,9 @@ function durationOf(file) {
 }
 
 function speak(key, text, { voice, rate }) {
-  const file = path.join(VOICE_DIR, `${key}.mp3`);
+  // A new file name every run, so a run that fails part way hasn't overwritten
+  // the narration the last manifest points at.
+  const file = path.join(VOICE_DIR, `${key}-${Date.now()}.mp3`);
   const result = spawnSync('edge-tts', ['--voice', voice, `--rate=${rate}`, '--text', text, '--write-media', file], { encoding: 'utf8' });
   if (result.status !== 0 || !existsSync(file)) {
     throw new Error(`edge-tts failed for "${key}": ${result.stderr || result.error?.message || 'no output'}`);
@@ -80,6 +82,17 @@ async function startServer() {
   }
   server.kill();
   throw new Error('The server did not start.');
+}
+
+// Deletes the last recording's files once a new one has been mixed. --mix-only
+// needs them until then, so a run that fails part way keeps them.
+async function removeOldFiles(manifest) {
+  const inUse = new Set([MANIFEST, ...manifest.parts.map((p) => p.file), ...Object.values(manifest.voice)].map((f) => path.resolve(f)));
+  for (const dir of [path.join(OUT, 'raw'), VOICE_DIR]) {
+    for (const name of readdirSync(dir)) {
+      if (!inUse.has(path.resolve(dir, name))) await rm(path.join(dir, name), { recursive: true, force: true });
+    }
+  }
 }
 
 // Everything the mix needs, so it can be re-run without re-recording.
@@ -120,8 +133,6 @@ const script = JSON.parse(await readFile(new URL('./narration.json', import.meta
 const featured = JSON.parse(await readFile('public/demo/featured-run.json', 'utf8'));
 const models = featured.events.find((e) => e.type === 'result')?.claim.models ?? [];
 
-await rm(path.join(OUT, 'raw'), { recursive: true, force: true });
-await rm(VOICE_DIR, { recursive: true, force: true });
 await mkdir(VOICE_DIR, { recursive: true });
 
 const lines = {};
@@ -132,6 +143,10 @@ const holdFor = (key) => (lines[key] ? lines[key].ms + LEAD_MS + TAIL_MS : 0);
 const cardMs = (key, minimum) => Math.max(minimum, holdFor(key));
 
 const server = await startServer();
+// Stop the local server however the script ends, including a failed browser
+// launch or Ctrl+C, so it can't keep the port busy for the next run.
+process.on('exit', () => server.kill());
+for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => process.exit(signal === 'SIGINT' ? 130 : 143));
 const browser = await chromium.launch({ executablePath: findChromium(), headless: true });
 // Very short recordings add nothing the in-app screenshots don't already show.
 const hasClip = existsSync(ANAKIN_CLIP) && durationOf(ANAKIN_CLIP) >= 3;
@@ -221,6 +236,7 @@ try {
   };
   await writeFile(MANIFEST, JSON.stringify(manifest, null, 2));
   mix(manifest);
+  await removeOldFiles(manifest);
 } finally {
   await browser.close();
   server.kill();

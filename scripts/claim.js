@@ -50,6 +50,7 @@ try {
 emit({ type: 'end' });
 
 await mkdir('runs', { recursive: true });
-const file = `runs/${flightNumber}-${date}-${started}.json`;
+// Only letters and digits from the flight number, so "AI/162" can't point the path at another folder.
+const file = `runs/${flightNumber.replace(/[^a-z0-9]/gi, '')}-${date}-${started}.json`;
 await writeFile(file, JSON.stringify({ input: { flightNumber, date }, events }));
 console.log(`\nSaved ${file}`);
