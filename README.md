@@ -126,6 +126,7 @@ Put the live service's address in `public/site.json` so the static page can link
 
 ## Limits
 
+- This is a hackathon prototype, not a service for real claims. It reads flight data from FlightAware's public pages, whose [terms](https://www.flightaware.com/about/termsofuse) only allow personal, non-automated use, and from AirHelp's flight status through Anakin Wire. A real service would need flight data from a licensed source whose terms cover compensation claims.
 - FlightAware's public history only goes back about 14 days, so older flights can't be checked yet.
 - Diversions and multi-leg trips aren't handled.
 - Cancellations come back as "depends", because the answer hinges on how much notice you got, and flight data can't show that. India's cancellation amounts depend on block time, which Claimback estimates from distance.
