@@ -1,22 +1,34 @@
 # Claimback
 
-**Your flight was late. The airline owes you. Claimback proves it and fills in the claim.**
+**Your flight was late. The airline probably owes you. Claimback works out how much and fills in the claim.**
 
-Millions of passengers are owed delay compensation every year and never claim it, because working out whether you qualify means digging up real arrival times, reading regulations, and fighting an airline's form. Claimback is an AI agent that does all three. Give it a flight number and a date: it reads what actually happened, reads the law that covers the flight, decides what you're owed, and fills in the airline's own claim form in a recorded cloud browser. It stops before pressing Submit, so the final click is always yours.
+If your flight lands three or more hours late, UK and EU rules usually mean the airline owes you money. A lot of people never claim it, and I get why. You have to dig up the real arrival time, figure out which regulation applies, and then fight your way through the airline's claim form.
 
-Built for **Anakin Forge 2026** on [Anakin](https://anakin.io), with OpenAI and Gemini for reasoning.
+Claimback does that part for you. Give it a flight number and a date. It checks what actually happened to the flight, reads the law that covers it, works out what you're owed, and fills in the airline's own claim form in a recorded cloud browser. It stops before Submit, so the last click is always yours.
 
-**Try it:** [watch a recorded run](https://claimback-kt20.onrender.com) (always on), or [start a live claim](https://claimback-live.onrender.com) (needs the access code, and takes about a minute to wake).
+I built it for **Anakin Forge 2026** on top of [Anakin](https://anakin.io)'s APIs, with OpenAI and Gemini doing the reasoning.
+
+![Claimback showing £260 to £520 owed for Air India flight AI162](assets/home.png)
+
+**Try it:** [watch a recorded run](https://claimback-kt20.onrender.com) (always on), or [start a live claim](https://claimback-live.onrender.com). Live claims need the access code, and the server takes about a minute to wake up.
 
 ## A real run
 
-**Air India AI162, London Heathrow to Delhi, 9 September 2026.**
+Here's what happened with **Air India AI162, London Heathrow to Delhi, on 9 September 2026**.
 
-- **Read.** FlightAware's gate times say it was due at 00:20 and reached the gate at 03:47, 207 minutes late. AirHelp's flight-status listing independently reports 207 minutes.
-- **Reason.** It departed the UK, so UK Regulation 261/2004 applies. India's DGCA rules also apply to an Indian airline, but pay nothing for delays. The route is 6,732 km. Claimback reads Article 7 on legislation.gov.uk and decides the passenger is owed £520, which Air India may halve to £260 because the delay was between 3 and 4 hours.
-- **Act.** It finds Air India's own EU/UK delay claim form with Anakin Search, opens it in Anakin's cloud browser through a UK connection, rejects the cookie banner, fills in the ticket number and surname, and stops at Submit. Then it writes the claim letter.
+**Read.** FlightAware's gate times say the flight was due at 00:20 and reached the gate at 03:47, so it was 207 minutes late. AirHelp's flight status, checked separately, also says 207 minutes.
 
-The whole run takes a few minutes and about 14 Anakin credits.
+**Reason.** The flight left the UK, so UK Regulation 261/2004 applies. India's DGCA rules apply too, since Air India is an Indian airline, but they don't pay cash for delays. The route is 6,732 km. Claimback reads Article 7 on legislation.gov.uk and decides the passenger is owed £520. On a flight that long, a delay of 3 to 4 hours lets the airline pay half, so the honest answer is somewhere between £260 and £520.
+
+**Act.** It finds Air India's own EU/UK delay claim form with Anakin Search and opens it in Anakin's cloud browser through a UK connection. It rejects the cookie banner, types in the ticket number and surname, and stops at Submit.
+
+![Air India's EU/UK flight delay form, opened by Claimback in Anakin's cloud browser](assets/delay_form.png)
+
+Then it writes a claim letter, in case you'd rather email the airline or the form doesn't work out.
+
+![The claim letter Claimback wrote for flight AI162](assets/claim_letter.png)
+
+A run like this takes a few minutes and about 14 Anakin credits.
 
 ## How it works
 
@@ -34,34 +46,34 @@ flowchart LR
   J --> K[Claim letter]
 ```
 
-| Phase | What happens | Anakin product |
+| Step | What happens | Anakin product |
 |---|---|---|
-| Read | Airline code to ICAO code, country and EU261 status | Wire (`act_airhelp_airline_autocomplete`) |
-| Read | Scheduled and actual gate times for the last 14 days | URL Scraper (FlightAware) |
-| Read | A second, independent delay figure | Wire (`act_airhelp_flight_status_listing`) |
-| Reason | Airport countries and coordinates, great-circle distance | Wire (`act_airhelp_airport_autocomplete`) |
-| Reason | The official regulation text, read live | URL Scraper (legislation.gov.uk, europa.eu) |
-| Reason | Reports of weather, strikes or ATC problems the airline could cite | Search |
-| Act | The airline's own claim form | Search |
-| Act | Filling it in through a connection in the departure country, recorded, stopping at Submit | Browser API |
+| Read | Turns the airline code into its ICAO code, country and EU261 status | Wire (`act_airhelp_airline_autocomplete`) |
+| Read | Gets scheduled and actual gate times for the last 14 days | URL Scraper (FlightAware) |
+| Read | Gets a second, independent delay figure | Wire (`act_airhelp_flight_status_listing`) |
+| Reason | Looks up airport countries and coordinates to measure the distance | Wire (`act_airhelp_airport_autocomplete`) |
+| Reason | Reads the official regulation text live | URL Scraper (legislation.gov.uk, europa.eu) |
+| Reason | Looks for weather, strikes or ATC problems the airline could blame | Search |
+| Act | Finds the airline's own claim form | Search |
+| Act | Fills it in through a connection in the departure country, recorded, stopping at Submit | Browser API |
 
-Every decision is a structured JSON answer from the model: OpenAI when `OPENAI_API_KEY` is set, with Gemini as the fallback.
+Every decision comes back from the model as structured JSON. OpenAI answers when `OPENAI_API_KEY` is set, and Gemini steps in if OpenAI fails.
 
 ## Why you can trust the answer
 
-An agent that files legal claims has to be right, so the model is never the last word:
+An agent that helps people make legal claims can't just sound confident. It has to be right, so the model never gets the final say.
 
-- **Two sources for the delay.** FlightAware and AirHelp are compared, and any disagreement is shown rather than hidden. Delay is measured at the gate, which is what the law uses.
-- **The airline that flew it.** A codeshare flight number is traced to the airline that operated the flight, because the law and the claim follow that airline.
-- **Quotes are checked.** Every sentence the model cites from a regulation must appear in full on the page it was read from, and is marked if it can't be found.
-- **Amounts are checked.** Each decision is compared with a built-in table of EU261, UK261, Canadian and Indian rules. The table sets the final figures, and any disagreement is shown. If the regulation page or the model is unavailable, the table still decides.
-- **Sources are real.** A search result the model cites is dropped unless Anakin Search actually returned it, and only web addresses are ever opened or linked.
-- **It never submits.** Before the airline's page loads, Claimback switches off form submission inside it, so no click, Enter key or script can send the form. It also blocks any script request carrying the passenger's ticket number, booking reference or email, and refuses to click any control that would submit, send, confirm or pay. These rules are code, not prompt instructions.
-- **Failures are loud.** Missing flight times, airports without coordinates, diversions and flights older than 14 days produce a clear message, never a quiet "nothing owed".
+- **Two sources for the delay.** FlightAware and AirHelp are compared, and if they disagree you'll see it. Delay is measured at the gate, because that's what the law uses.
+- **The airline that actually flew.** A codeshare number is traced to the airline that operated the flight, since the law and the claim follow that airline.
+- **Quotes get checked.** Every sentence the model quotes from a regulation has to appear on the page it read. If it doesn't, the quote is flagged.
+- **Amounts get checked.** Each decision is compared with a built-in table of EU261, UK261, Canadian and Indian rules, and the table sets the final numbers. If the regulation page or the model is down, the table still decides.
+- **Sources are real.** A search result the model cites is dropped unless Anakin Search really returned it, and only normal web links are ever opened or shown.
+- **It never submits.** Before the airline's page loads, Claimback switches off form submission inside it, so no click, Enter key or script can send the form. It also blocks any request that carries your ticket number, booking reference or email, and it won't click anything that submits, sends, confirms or pays. All of this is code, not a line in a prompt.
+- **Problems are loud.** Missing flight times, airports without coordinates, diversions and flights older than 14 days get a clear message, never a quiet "nothing owed".
 
 ## Run it locally
 
-Needs Node 22+, an [Anakin API key](https://anakin.io), and an OpenAI or [Gemini](https://aistudio.google.com/apikey) key.
+You'll need Node 22 or newer, an [Anakin API key](https://anakin.io), and either an OpenAI or a [Gemini](https://aistudio.google.com/apikey) key.
 
 ```bash
 npm install
@@ -69,14 +81,14 @@ cp .env.example .env    # add ANAKIN_API_KEY and OPENAI_API_KEY or GEMINI_API_KE
 npm start               # http://localhost:7860
 ```
 
-From the terminal:
+You can also run a claim from the terminal:
 
 ```bash
 npm run claim -- AI162 2026-09-09             # the full run, saved to runs/
 npm run claim -- AI162 2026-09-09 --no-form   # skip the browser step
 ```
 
-Every visitor sees a recorded run. Live runs spend credits, so they need the `LIVE_RUN_CODE` from `.env`. Wrong codes are limited per visitor, and a run that goes past 15 minutes is stopped so it can't hold the live-run slot.
+Visitors see a recorded run. Live runs spend credits, so they need the `LIVE_RUN_CODE` from `.env`. Too many wrong codes from one visitor lock them out for up to 15 minutes, and a run that goes past 15 minutes is dropped so it can't hold the only live slot.
 
 ## Tests
 
@@ -84,39 +96,40 @@ Every visitor sees a recorded run. Live runs spend credits, so they need the `LI
 npm test
 ```
 
-The tests need no keys and spend no credits: Anakin, FlightAware and the models are all mocked. They cover the compensation table, the guardrail, codeshares, bad flight data, model fallback, recording lookup, the server's input checks, limits and event stream, and the page itself. The form-filler tests drive a local Chrome through airline-style pages built to trick it into sending, including scripts that post the ticket number behind a "Continue" button, and check that nothing is sent. Browser tests are skipped if Chrome isn't found; set `CHROME_PATH` to point at it.
+The tests don't need keys and don't spend credits, because Anakin, FlightAware and the models are all faked. They cover the compensation table, the guardrail, codeshares, bad flight data, model fallback, recording lookup, the server's input checks and limits, and the web page. The form filler tests drive a real local Chrome through pages built to trick it into sending, including a "Continue" button that quietly posts your ticket number, and they fail if anything gets out. If Chrome isn't installed those tests are skipped, and you can point `CHROME_PATH` at it.
 
 ## Deploy
 
-`render.yaml` is a Render Blueprint. In Render, choose New > Blueprint, pick this repository, and fill in the secrets. It creates two free services:
+`render.yaml` is a Render Blueprint. In Render, pick New > Blueprint, choose this repository and fill in the secrets. You get two free services:
 
-- **claimback**, a static site that plays the recorded run in `public/demo/featured-run.json`. It is always on and spends no credits.
-- **claimback-live**, the Node server for live claims. It needs `ANAKIN_API_KEY`, `OPENAI_API_KEY` or `GEMINI_API_KEY`, and `LIVE_RUN_CODE`. Free web services sleep when idle, so the first visit takes about a minute.
+- **claimback** is a static site that plays the recorded run in `public/demo/featured-run.json`. It's always on and never spends credits.
+- **claimback-live** is the Node server for live claims. It needs `ANAKIN_API_KEY`, `OPENAI_API_KEY` or `GEMINI_API_KEY`, and `LIVE_RUN_CODE`. Free web services sleep when nobody's using them, so the first visit takes about a minute.
 
-Put the live service's address in `public/site.json` so the static page links to it. To replay a different run, use `node scripts/feature-run.js runs/<a complete run>.json`. A `Dockerfile` is included for hosts that run containers.
+Put the live service's address in `public/site.json` so the static page can link to it. To replay a different run, use `node scripts/feature-run.js runs/<a complete run>.json`. There's also a `Dockerfile` if you'd rather use a host that runs containers.
 
 ## Project layout
 
-| Path | What it is |
+| Path | What's in it |
 |---|---|
 | `lib/agent.js` | The Read, Reason, Act pipeline and the checks around the model |
 | `lib/flight.js` | FlightAware parsing and the AirHelp Wire lookups |
 | `lib/rules.js` | Which laws apply, and the reference compensation table |
-| `lib/claimform.js` | The cloud-browser form filler and its submit guard |
+| `lib/claimform.js` | The cloud browser form filler and its submit guard |
 | `lib/llm.js`, `lib/openai.js`, `lib/gemini.js` | Structured model calls with fallback |
 | `lib/anakin.js` | The Anakin API client |
 | `server.js`, `public/` | The web app, with live runs streamed over server-sent events |
-| `scripts/` | Terminal runner, replay promotion, demo video |
+| `scripts/` | Terminal runner, replay promotion and the demo video |
 | `test/` | Offline unit, server and browser tests |
+| `assets/` | Screenshots for this README |
 
 ## Limits
 
-- FlightAware's public history covers about 14 days, so older flights can't be checked yet.
-- Diversions and multi-leg journeys aren't handled.
-- Cancellation claims depend on how much notice was given, which flight data can't show, so they come back as "depends". India's cancellation amounts depend on block time, which is estimated from distance.
-- Airline forms vary. When one needs a login, a captcha or a booking lookup, Claimback stops and says so, and the claim letter is the fallback.
-- The submit guard can't see inside binary request bodies or page navigations, so a site that sends the passenger's details that way could still get them through. Every run is recorded, so that would show.
-- Claimback is not legal advice.
+- FlightAware's public history only goes back about 14 days, so older flights can't be checked yet.
+- Diversions and multi-leg trips aren't handled.
+- Cancellations come back as "depends", because the answer hinges on how much notice you got, and flight data can't show that. India's cancellation amounts depend on block time, which Claimback estimates from distance.
+- Airline forms vary a lot. If one needs a login, a captcha or a booking lookup, Claimback stops and tells you, and the letter is your fallback.
+- The submit guard can't see inside binary request bodies or page navigations, so a site that sends your details that way could still get them out. Every run is recorded, so you'd see it happen.
+- Claimback isn't legal advice.
 
 ## License
 
