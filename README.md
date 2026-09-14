@@ -12,6 +12,8 @@ I built it for **Anakin Forge 2026** on top of [Anakin](https://anakin.io)'s API
 
 **Try it:** [watch a recorded run](https://claimback-kt20.onrender.com) (always on), or [start a live claim](https://claimback-live.onrender.com). Live claims need the access code, and the server takes about a minute to wake up.
 
+**Demo video:** [watch the 3-minute walkthrough on YouTube](https://youtu.be/Qso_MPN9rk0).
+
 ## A real run
 
 Here's what happened with **Air India AI162, London Heathrow to Delhi, on 9 September 2026**.
