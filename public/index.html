@@ -23,8 +23,8 @@
     <section class="grid">
       <aside class="panel">
         <form id="claim-form">
-          <label>Flight number <input name="flightNumber" value="AI162" required maxlength="8" autocomplete="off" /></label>
-          <label>Departure date <input name="date" type="date" value="2026-09-09" required /></label>
+          <label>Flight number <input name="flightNumber" placeholder="e.g. AI162" required maxlength="8" autocomplete="off" /></label>
+          <label>Departure date <input name="date" type="date" required /></label>
           <label>Your name <input name="fullName" placeholder="Alex Demo" maxlength="80" autocomplete="name" /></label>
           <label>Email <input name="email" type="email" placeholder="alex.demo@example.com" maxlength="120" autocomplete="email" /></label>
           <label>E-ticket number <input name="ticketNumber" placeholder="Optional" maxlength="20" inputmode="numeric" autocomplete="off" /></label>
@@ -39,8 +39,8 @@
 
       <section class="stage" aria-live="polite">
         <div id="empty" class="empty">
-          <p><strong>Try AI162 on 9 September 2026.</strong> A real Air India flight from London Heathrow to Delhi that reached its gate 3 hours 27 minutes late.</p>
-          <p>Press <em>Watch a recorded run</em> to see the agent handle it from start to finish.</p>
+          <p><strong>Watch a recorded run:</strong> Air India AI162 from London Heathrow to Delhi on 9 September 2026, which reached its gate 3 hours 27 minutes late.</p>
+          <p>To run a claim live, enter a flight from the last 14 days and the access code.</p>
         </div>
         <div id="result"></div>
         <ol id="timeline" class="timeline"></ol>
@@ -61,7 +61,7 @@
       <div>
         <span class="chip act">Act</span>
         <h2>The claim, filled in</h2>
-        <p>It finds the airline's claim form with Anakin Search and fills it in Anakin's recorded cloud browser, stopping at the submit button. It also writes a claim letter you can send.</p>
+        <p>It finds the airline's claim form with Anakin Search and fills it in Anakin's recorded cloud browser, with form submission switched off so nothing can be sent. It also writes a claim letter you can send.</p>
       </div>
     </section>
   </main>

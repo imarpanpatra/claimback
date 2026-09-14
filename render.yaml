@@ -19,6 +19,8 @@ services:
     envVars:
       - key: NODE_VERSION
         value: "22"
+      - key: NODE_ENV
+        value: production
       - key: ANAKIN_API_KEY
         sync: false
       - key: GEMINI_API_KEY

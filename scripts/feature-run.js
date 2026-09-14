@@ -20,9 +20,15 @@ if (!run.events.some((e) => e.type === 'result')) {
 const errors = run.events.filter((e) => e.type === 'error');
 if (errors.length) console.warn(`Warning: the run contains errors: ${errors.map((e) => e.message).join(' | ')}`);
 
-// Recording links are presigned for an hour, so they can't live in a replay.
+// Recording links are presigned, carry a session token and expire after an
+// hour, so none of them belongs in a public replay.
 const recording = run.events.find((e) => e.type === 'recording');
-const events = run.events.filter((e) => e.type !== 'recording');
+const withoutLink = (e) => {
+  if (e.type !== 'result' || !e.claim?.filing) return e;
+  const { recordingUrl, ...filing } = e.claim.filing;
+  return { ...e, claim: { ...e.claim, filing } };
+};
+const events = run.events.filter((e) => e.type !== 'recording').map(withoutLink);
 
 // Kept under public/ so the page can replay it from any static host.
 await mkdir('public/demo', { recursive: true });
@@ -31,16 +37,26 @@ const out = JSON.stringify({ input: run.input, recordedAt, events });
 await writeFile('public/demo/featured-run.json', out);
 console.log(`public/demo/featured-run.json: ${events.length} events, ${Math.round(out.length / 1024)} KB`);
 
+// A recording link ends in the session's connection id, e.g. .../rec-f81b….webm.
+const connIdOf = (url) => {
+  try {
+    return new URL(url).pathname.split('/').pop().replace(/\.webm$/, '') || null;
+  } catch {
+    return null;
+  }
+};
+
 if (recording) {
   await mkdir('recordings', { recursive: true });
   let res = await fetch(recording.url).catch(() => null);
-  if (!res?.ok && process.env.ANAKIN_API_KEY) {
-    // The link has expired: ask Anakin for a fresh one for the newest recording.
+  const connId = connIdOf(recording.url);
+  if (!res?.ok && process.env.ANAKIN_API_KEY && connId) {
+    // The link has expired: ask Anakin for a fresh link to this run's own recording.
     const headers = { 'X-API-Key': process.env.ANAKIN_API_KEY };
-    const list = await fetch('https://api.anakin.io/v1/recordings', { headers }).then((r) => r.json());
-    const newest = (list.recordings ?? []).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0];
-    const detail = newest && (await fetch(`https://api.anakin.io/v1/recordings/${newest.connId ?? newest.id}`, { headers }).then((r) => r.json()));
-    if (detail?.videoUrl) res = await fetch(detail.videoUrl);
+    const detail = await fetch(`https://api.anakin.io/v1/recordings/${connId}`, { headers })
+      .then((r) => (r.ok ? r.json() : null))
+      .catch(() => null);
+    if (detail?.videoUrl) res = await fetch(detail.videoUrl).catch(() => null);
   }
   if (res?.ok) {
     const bytes = Buffer.from(await res.arrayBuffer());

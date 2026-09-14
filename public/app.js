@@ -7,6 +7,7 @@ const PHASES = { read: 'Read', reason: 'Reason', act: 'Act' };
 const steps = new Map();
 let lastStep = null;
 let source = null;
+let following = 0; // bumped on every reset, so a stale reconnect does nothing
 let cancelReplay = () => {};
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -17,6 +18,12 @@ const hostOf = (url) => {
     return url;
   }
 };
+const localIsoDate = (date) => new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 10);
+
+// FlightAware's public history covers about 14 days, so only offer those dates.
+const dateInput = $('#claim-form').date;
+dateInput.max = localIsoDate(new Date());
+dateInput.min = localIsoDate(new Date(Date.now() - 14 * 86_400_000));
 
 function el(tag, attrs = {}, ...children) {
   const node = document.createElement(tag);
@@ -166,6 +173,7 @@ $('#zoom').addEventListener('click', () => $('#zoom').close());
 
 function reset() {
   cancelReplay();
+  following += 1;
   source?.close();
   steps.clear();
   lastStep = null;
@@ -183,6 +191,43 @@ function setBusy(busy) {
 
 function showError(message) {
   append(null, el('p', { class: 'error' }, message));
+}
+
+// Follows a live run's events. If the stream drops, it reconnects from the last
+// event it saw; if the server stays unreachable, it says so instead of freezing.
+function follow(id) {
+  const token = ++following;
+  let nextSeq = 0;
+  let failures = 0;
+
+  const connect = () => {
+    if (token !== following) return;
+    source = new EventSource(`api/runs/${id}/events?from=${nextSeq}`);
+    source.onmessage = (m) => {
+      const e = JSON.parse(m.data);
+      failures = 0;
+      if (typeof e.seq === 'number') {
+        if (e.seq < nextSeq) return;
+        nextSeq = e.seq + 1;
+      }
+      render(e);
+      if (e.type === 'end') source.close();
+    };
+    source.onerror = () => {
+      source.close();
+      if (token !== following) return;
+      failures += 1;
+      if (failures > 5) {
+        finishStep();
+        lastStep?.classList.add('failed');
+        showError('Lost the connection to this run. It may still finish on the server, so try again in a minute.');
+        setBusy(false);
+        return;
+      }
+      setTimeout(connect, failures * 1000);
+    };
+  };
+  connect();
 }
 
 $('#claim-form').addEventListener('submit', async (ev) => {
@@ -206,16 +251,7 @@ $('#claim-form').addEventListener('submit', async (ev) => {
     showError(body?.error ?? 'Couldn’t reach the server.');
     return;
   }
-  source = new EventSource(`api/runs/${body.id}/events`);
-  source.onmessage = (m) => {
-    const e = JSON.parse(m.data);
-    render(e);
-    if (e.type === 'end') source.close();
-  };
-  source.onerror = () => {
-    source.close();
-    setBusy(false);
-  };
+  follow(body.id);
 });
 
 async function replay() {

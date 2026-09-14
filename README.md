@@ -52,15 +52,16 @@ Every decision is a structured JSON answer from the model: OpenAI when `OPENAI_A
 An agent that files legal claims has to be right, so the model is never the last word:
 
 - **Two sources for the delay.** FlightAware and AirHelp are compared, and any disagreement is shown rather than hidden. Delay is measured at the gate, which is what the law uses.
-- **Quotes are checked.** Every sentence the model cites from a regulation is matched against the page it was read from, and marked if it can't be found.
+- **The airline that flew it.** A codeshare flight number is traced to the airline that operated the flight, because the law and the claim follow that airline.
+- **Quotes are checked.** Every sentence the model cites from a regulation must appear in full on the page it was read from, and is marked if it can't be found.
 - **Amounts are checked.** Each decision is compared with a built-in table of EU261, UK261, Canadian and Indian rules. The table sets the final figures, and any disagreement is shown.
 - **Sources are real.** A search result the model cites is dropped unless Anakin Search actually returned it.
-- **It never submits.** Buttons that submit, send, confirm or pay are blocked in code, not just in the prompt.
+- **It never submits.** Before the airline's page loads, Claimback switches off form submission inside it, so no click, Enter key or script can send the form. It also refuses to click any control that would submit, send, confirm or pay. Both rules are code, not prompt instructions.
 - **Failures are loud.** Missing flight data, diversions and flights older than 14 days produce a clear message, never a quiet "nothing owed".
 
 ## Run it locally
 
-Needs Node 20+, an [Anakin API key](https://anakin.io), and an OpenAI or [Gemini](https://aistudio.google.com/apikey) key.
+Needs Node 22+, an [Anakin API key](https://anakin.io), and an OpenAI or [Gemini](https://aistudio.google.com/apikey) key.
 
 ```bash
 npm install
@@ -76,6 +77,14 @@ npm run claim -- AI162 2026-09-09 --no-form   # skip the browser step
 ```
 
 Every visitor sees a recorded run. Live runs spend credits, so they need the `LIVE_RUN_CODE` from `.env`.
+
+## Tests
+
+```bash
+npm test
+```
+
+The tests need no keys and spend no credits: Anakin, FlightAware and the models are all mocked. They cover the compensation table, the guardrail, codeshares, model fallback, recording lookup, the server's input checks and event stream, and the page itself. The form-filler tests drive a local Chrome through airline-style pages built to trick it into sending, and check that nothing is sent. Browser tests are skipped if Chrome isn't found; set `CHROME_PATH` to point at it.
 
 ## Deploy
 
@@ -98,13 +107,15 @@ Put the live service's address in `public/site.json` so the static page links to
 | `lib/anakin.js` | The Anakin API client |
 | `server.js`, `public/` | The web app, with live runs streamed over server-sent events |
 | `scripts/` | Terminal runner, replay promotion, demo video |
+| `test/` | Offline unit, server and browser tests |
 
 ## Limits
 
 - FlightAware's public history covers about 14 days, so older flights can't be checked yet.
 - Diversions and multi-leg journeys aren't handled.
-- Cancellation claims depend on how much notice was given, which flight data can't show, so they come back as "depends".
+- Cancellation claims depend on how much notice was given, which flight data can't show, so they come back as "depends". India's cancellation amounts depend on block time, which is estimated from distance.
 - Airline forms vary. When one needs a login, a captcha or a booking lookup, Claimback stops and says so, and the claim letter is the fallback.
+- The submit guard stops real form submissions and any button labelled submit, send, confirm or pay. A site whose own script sends the claim from a button with another label, such as Continue, could get past it. Every run is recorded, so that would show.
 - Claimback is not legal advice.
 
 ## License

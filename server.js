@@ -9,6 +9,7 @@ import { llmLabel } from './lib/llm.js';
 dotenv.config({ quiet: true });
 
 const PORT = Number(process.env.PORT) || 7860;
+const DAY = 86_400_000;
 // Used for any field a visitor leaves blank. The agent stops before submitting,
 // so demo details never reach an airline.
 const DEMO_PASSENGER = { fullName: 'Alex Demo', email: 'alex.demo@example.com', ticketNumber: '0982100000000' };
@@ -31,34 +32,49 @@ function codeMatches(given) {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
+// FlightAware's public history goes back about 14 days, so a date outside it
+// would only fail after credits are spent. A day's slack covers time zones.
+function dateProblem(date) {
+  if (typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return 'Enter the departure date.';
+  const ms = Date.parse(`${date}T00:00:00Z`);
+  if (Number.isNaN(ms) || new Date(ms).toISOString().slice(0, 10) !== date) return 'That isn’t a real date.';
+  const daysAgo = (Date.now() - ms) / DAY;
+  if (daysAgo > 15) return 'Claimback can only check flights from the last 14 days.';
+  if (daysAgo < -1) return 'That flight hasn’t happened yet.';
+  return null;
+}
+
 app.get('/api/config', (req, res) => {
   const hasModel = Boolean(process.env.OPENAI_API_KEY || process.env.GEMINI_API_KEY);
   res.json({ liveRuns: Boolean(process.env.LIVE_RUN_CODE && hasModel), model: llmLabel() });
 });
 
 app.post('/api/runs', (req, res) => {
-  const { code, flightNumber, date, passenger = {} } = req.body ?? {};
+  const body = req.body && typeof req.body === 'object' ? req.body : {};
+  const { code, flightNumber, date } = body;
+  const passenger = body.passenger && typeof body.passenger === 'object' ? body.passenger : {};
   if (!codeMatches(code)) return res.status(403).json({ error: 'That access code isn’t right.' });
-  if (!text(flightNumber, 10) || !/^\d{4}-\d{2}-\d{2}$/.test(date ?? '')) {
-    return res.status(400).json({ error: 'Enter a flight number and a date.' });
-  }
+  if (!text(flightNumber, 10)) return res.status(400).json({ error: 'Enter a flight number.' });
+  const problem = dateProblem(date);
+  if (problem) return res.status(400).json({ error: problem });
   if (running >= 1) return res.status(429).json({ error: 'A claim is already running. Try again in a couple of minutes.' });
 
-  const id = randomUUID();
-  const run = { input: { flightNumber, date }, events: [], listeners: new Set(), done: false, startedAt: Date.now() };
-  runs.set(id, run);
-  running++;
-
-  const emit = (event) => {
-    const e = { ...event, t: Date.now() - run.startedAt };
-    run.events.push(e);
-    for (const send of run.listeners) send(e);
-  };
   const who = {
     fullName: text(passenger.fullName, 80) || DEMO_PASSENGER.fullName,
     email: text(passenger.email, 120) || DEMO_PASSENGER.email,
     bookingReference: text(passenger.bookingReference, 12),
     ticketNumber: text(passenger.ticketNumber, 20) || DEMO_PASSENGER.ticketNumber,
+  };
+  const id = randomUUID();
+  const run = { input: { flightNumber, date }, events: [], listeners: new Set(), done: false, startedAt: Date.now() };
+  runs.set(id, run);
+  running++;
+
+  // Events are numbered so a page whose stream drops can resume where it left off.
+  const emit = (event) => {
+    const e = { ...event, t: Date.now() - run.startedAt, seq: run.events.length };
+    run.events.push(e);
+    for (const send of run.listeners) send(e);
   };
 
   runClaim({ flightNumber: text(flightNumber, 10), date, passenger: who }, emit)
@@ -82,7 +98,8 @@ app.get('/api/runs/:id/events', (req, res) => {
   res.set({ 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
   res.flushHeaders();
   const send = (e) => res.write(`data: ${JSON.stringify(e)}\n\n`);
-  run.events.forEach(send);
+  const from = Math.max(0, Number.parseInt(req.query.from, 10) || 0);
+  run.events.slice(from).forEach(send);
   if (run.done) return res.end();
 
   const listener = (e) => {
@@ -95,6 +112,13 @@ app.get('/api/runs/:id/events', (req, res) => {
     clearInterval(ping);
     run.listeners.delete(listener);
   });
+});
+
+// Express's own error page shows a stack trace outside production.
+app.use((err, req, res, next) => {
+  if (res.headersSent) return next(err);
+  const status = err.status ?? err.statusCode ?? 500;
+  res.status(status).json({ error: err.type === 'entity.parse.failed' ? 'The request body isn’t valid JSON.' : 'Something went wrong.' });
 });
 
 app.listen(PORT, () => console.log(`Claimback running on http://localhost:${PORT}`));
